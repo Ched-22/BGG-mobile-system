@@ -1,0 +1,30 @@
+@import "./styles/design-tokens.css";
+@import "./styles/app.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background: #050505;
+}
+
+.stage {
+  min-height: 100vh;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  background:
+    radial-gradient(60% 50% at 50% 0%, rgba(194, 164, 109, 0.06), transparent 70%),
+    #050505;
+}
+
+[data-theme="light"] body {
+  background: #ece5d6;
+}
+
+[data-theme="light"] .stage {
+  background:
+    radial-gradient(60% 50% at 50% 0%, rgba(140, 110, 55, 0.1), transparent 70%),
+    #e6dec8;
+}
