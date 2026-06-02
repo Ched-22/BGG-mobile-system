@@ -3,9 +3,9 @@
 // ============================================================
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { Icon } from '../components/Icon.jsx'
-import { TopBarActions } from '../components/ThemeToggle.jsx'
 import {
   TopBar,
+  TopBarActions,
   Field,
   TextInput,
   TextArea,
@@ -61,7 +61,7 @@ function buildSampleEntryState() {
   return state;
 }
 
-export function ChecklistScreen({ onBack, addToast, online, vehicleContext, theme, onToggleTheme }) {
+export function ChecklistScreen({ onBack, addToast, online, vehicleContext }) {
   // Tab: "entrada" | "saida"
   const [tab, setTab] = useState("entrada");
   // Entry state (live)
@@ -92,12 +92,12 @@ export function ChecklistScreen({ onBack, addToast, online, vehicleContext, them
   };
 
   const vehicle = vehicleContext || {
-    plate: "RGM-2H47",
-    car: "Porsche 911 Carrera S",
-    client: "Marina Costa",
-    year: "2024",
-    color: "Preto Jet",
-  };
+    plate: 'RGM-2H47',
+    car: 'Porsche 911 Carrera S',
+    client: 'Marina Costa',
+    year: '2024',
+    color: 'Preto Jet',
+  }
 
   const onEntryStatus = (id, val) => {
     setEntry(prev => ({ ...prev, [id]: { ...(prev[id] || {}), status: val, photos: prev[id]?.photos || [], note: prev[id]?.note || "" } }));
@@ -233,7 +233,7 @@ export function ChecklistScreen({ onBack, addToast, online, vehicleContext, them
         title="Checklist do veículo"
         onBack={onBack}
         right={(
-          <TopBarActions theme={theme} onToggleTheme={onToggleTheme}>
+          <TopBarActions>
             <button className="topbar-action" onClick={loadSample} aria-label="Demo">
               <Icon name="Sparkles" size={18}/>
             </button>
@@ -253,6 +253,11 @@ export function ChecklistScreen({ onBack, addToast, online, vehicleContext, them
         <div className="card" style={{ padding: 14, display: "flex", flexDirection: "column", gap: 8 }}>
           <div className="row-between">
             <div className="stack-tight">
+              {vehicle.assignmentTitle && (
+                <div className="eyebrow" style={{ marginBottom: 4 }}>
+                  {vehicle.assignmentKind === 'tarefa' ? 'Tarefa' : 'Agendamento'} · {vehicle.assignmentTitle}
+                </div>
+              )}
               <div className="eyebrow">Veículo</div>
               <div style={{ fontFamily: "var(--e-mid)", color: "var(--gold)", fontSize: 18, fontWeight: 500, letterSpacing: "0.06em" }}>
                 {vehicle.plate}

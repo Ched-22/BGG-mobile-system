@@ -3,9 +3,9 @@
 // ============================================================
 import { useState } from 'react'
 import { Icon } from '../components/Icon.jsx'
-import { ThemeToggle, TopBarActions } from '../components/ThemeToggle.jsx'
 import {
   TopBar,
+  TopBarActions,
   Field,
   TextInput,
   Checkbox,
@@ -14,7 +14,7 @@ import {
 } from '../components/ui/index.jsx'
 import { isValidEmail } from '../utils/format.js'
 
-export function LoginScreen({ onLogin, theme, onToggleTheme }) {
+export function LoginScreen({ onLogin }) {
   const [email, setEmail] = useState('');
   const [pass, setPass] = useState('');
   const [remember, setRemember] = useState(true);
@@ -55,7 +55,6 @@ export function LoginScreen({ onLogin, theme, onToggleTheme }) {
     <div className="phone-shell fade-in">
       <div className="login-bg">
         <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 8 }}>
-          <ThemeToggle theme={theme} onToggle={onToggleTheme} />
           <div className="banner" style={{ background: "transparent", border: "1px solid var(--t-line)", padding: "4px 10px" }}>
             <Icon name="Wifi" size={11}/>
             <span>Online</span>
@@ -142,14 +141,14 @@ export function LoginScreen({ onLogin, theme, onToggleTheme }) {
 }
 
 // ---------- Dashboard ----------
-export function Dashboard({ user, onOpen, theme, onToggleTheme }) {
+export function Dashboard({ user, onOpen }) {
   return (
     <>
       <TopBar
         title="BGG · Técnico"
         onMenu={() => onOpen("menu")}
         right={(
-          <TopBarActions theme={theme} onToggleTheme={onToggleTheme}>
+          <TopBarActions>
             <button className="topbar-action" onClick={() => onOpen("notifications")} aria-label="Notificações">
               <Icon name="Bell" size={20}/>
             </button>
@@ -175,12 +174,12 @@ export function Dashboard({ user, onOpen, theme, onToggleTheme }) {
               <div className="tile-arrow"><Icon name="ArrowRight" size={18}/></div>
             </button>
 
-            <button className="action-tile" onClick={() => onOpen("checklist")}>
+            <button className="action-tile" onClick={() => onOpen("agendamentos")}>
               <div className="tile-glyph"><Icon name="ClipboardList" size={22} /></div>
               <div className="stack-tight">
-                <div className="eyebrow">Veículo</div>
-                <div className="tile-title">Checklist</div>
-                <div className="tile-sub">Registrar entrada ou saída do veículo</div>
+                <div className="eyebrow">Admin</div>
+                <div className="tile-title">Atendimentos</div>
+                <div className="tile-sub">Tarefas e agendamentos — depois o checklist</div>
               </div>
               <div className="tile-arrow"><Icon name="ArrowRight" size={18}/></div>
             </button>
@@ -203,7 +202,7 @@ export function Dashboard({ user, onOpen, theme, onToggleTheme }) {
                 key={i}
                 className="card"
                 style={{ textAlign: "left", display: "flex", flexDirection: "column", gap: 8 }}
-                onClick={() => onOpen("checklist", { plate: o.plate, car: o.car, client: o.client })}
+                onClick={() => onOpen("agendamentos", { plate: o.plate, car: o.car, client: o.client })}
               >
                 <div className="row-between">
                   <div className="stack-tight">

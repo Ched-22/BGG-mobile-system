@@ -21,7 +21,7 @@
   --e-mid: var(--font-display);     /* h3, big numbers */
   --e-eyebrow-tracking: 0.18em;
 
-  /* Theme mode (overridden by [data-theme]) — default dark */
+  /* Color tokens — dark theme only */
   --t-bg: #0B0B0B;
   --t-bg-elev: #1a1a1a;
   --t-bg-elev-2: #232323;
@@ -71,30 +71,6 @@
   --e-display: var(--font-display);
   --e-mid: var(--font-display);
 }
-
-[data-theme="light"] {
-  --t-bg: #F5F1E8;
-  --t-bg-elev: #FFFFFF;
-  --t-bg-elev-2: #FBF7EE;
-  --t-fg: #1A1410;
-  --t-fg-2: rgba(26,20,16,0.85);
-  --t-fg-3: rgba(26,20,16,0.65);
-  --t-fg-4: rgba(26,20,16,0.40);
-  --t-line: rgba(140,110,55,0.30);
-  --t-line-strong: rgba(140,110,55,0.55);
-  --t-line-hairline: rgba(26,20,16,0.10);
-  --t-input-bg: #FFFFFF;
-  --t-input-bg-focus: #FFFDF7;
-  --t-overlay: rgba(20,15,10,0.55);
-  --t-status-ok-bg: rgba(45, 130, 80, 0.10);
-  --t-status-ok-fg: #2D7A4F;
-  --t-status-warn-bg: rgba(180, 120, 30, 0.12);
-  --t-status-warn-fg: #9B6E1F;
-  --t-status-na-bg: rgba(80,80,80,0.08);
-  --t-status-na-fg: #6A6A6A;
-  --t-danger: #B0263E;
-}
-[data-theme="light"] .gold-text { color: #8C6E37; }
 
 /* ----- Base ----- */
 * { box-sizing: border-box; }

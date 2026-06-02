@@ -5,6 +5,10 @@ import { useEffect } from 'react'
 import { Icon } from '../Icon.jsx'
 
 // ---------- TopBar ----------
+export function TopBarActions({ children }) {
+  return <div className="topbar-actions">{children}</div>
+}
+
 export function TopBar({ title, onBack, onMenu, right }) {
   return (
     <header className="topbar">
@@ -27,8 +31,8 @@ export function TopBar({ title, onBack, onMenu, right }) {
 export function BottomNav({ active, onNav }) {
   const items = [
     { id: "dashboard", label: "Início", icon: "Sparkles" },
-    { id: "orcamento", label: "Orçamento", icon: "Wallet" },
-    { id: "checklist", label: "Checklist", icon: "ClipboardList" },
+    { id: "orcamento", label: "Orçamentos", icon: "Wallet" },
+    { id: "checklist", label: "Atendimentos", icon: "ClipboardList" },
     { id: "clientes", label: "Clientes", icon: "User" },
   ];
   return (
@@ -86,7 +90,7 @@ export function TextInput({ value, onChange, type = "text", placeholder, maxLeng
   );
 }
 
-export function TextArea({ value, onChange, placeholder, maxLength, rows = 3 }) {
+export function TextArea({ value, onChange, placeholder, maxLength, rows = 3, ...rest }) {
   const v = value ?? "";
   return (
     <div style={{ position: "relative" }}>
@@ -97,6 +101,7 @@ export function TextArea({ value, onChange, placeholder, maxLength, rows = 3 }) 
         onChange={(e) => onChange?.(e.target.value)}
         placeholder={placeholder}
         maxLength={maxLength}
+        {...rest}
       />
       {maxLength && (
         <div style={{

@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Icon } from './components/Icon.jsx'
-import { ThemeToggle } from './components/ThemeToggle.jsx'
 import { BottomNav, Sheet, Toast, TopBar } from './components/ui/index.jsx'
 import {
   useTweaks,
@@ -12,18 +11,23 @@ import {
 } from './components/tweaks/TweaksPanel.jsx'
 import { LoginScreen, Dashboard } from './screens/auth.jsx'
 import { OrcamentoScreen } from './screens/OrcamentoScreen.jsx'
+import { OrcamentosListScreen } from './screens/OrcamentosListScreen.jsx'
 import { ChecklistScreen } from './screens/ChecklistScreen.jsx'
+import { AgendamentosListScreen, AgendamentoDetailScreen } from './screens/AgendamentosScreen.jsx'
+import { useOrcamentos } from './hooks/useOrcamentos.js'
+import { useAgendamentos, agendamentoToVehicleContext } from './hooks/useAgendamentos.js'
 
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   density: 'comfortable',
   editorial: 'medium',
-  theme: 'dark',
 }/*EDITMODE-END*/
 
 export default function App() {
   const [screen, setScreen] = useState('login')
   const [user, setUser] = useState(null)
   const [vehicleContext, setVehicleContext] = useState(null)
+  const [selectedAgendamentoId, setSelectedAgendamentoId] = useState(null)
+  const [editingOrcamentoId, setEditingOrcamentoId] = useState(null)
   const [toasts, setToasts] = useState([])
   const [navActive, setNavActive] = useState('dashboard')
   const [menuOpen, setMenuOpen] = useState(false)
@@ -31,15 +35,25 @@ export default function App() {
   const [online, setOnline] = useState(true)
   const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS)
 
-  const toggleTheme = useCallback(() => {
-    setTweak('theme', tweaks.theme === 'dark' ? 'light' : 'dark')
-  }, [tweaks.theme, setTweak])
+  const {
+    pendingList,
+    approvedList,
+    getById,
+    saveDraft,
+    submitForApproval,
+  } = useOrcamentos()
+
+  const {
+    todayList,
+    upcomingList,
+    getById: getAgendamentoById,
+    findByPlate,
+  } = useAgendamentos()
 
   useEffect(() => {
     const root = document.documentElement
     root.setAttribute('data-density', tweaks.density)
     root.setAttribute('data-editorial', tweaks.editorial)
-    root.setAttribute('data-theme', tweaks.theme)
   }, [tweaks])
 
   const addToast = useCallback((t) => {
@@ -57,14 +71,65 @@ export default function App() {
     addToast({ kind: 'ok', msg: `Bem-vindo, ${u.name.split(' ')[0]}` })
   }
 
+  const goOrcamentosList = () => {
+    setEditingOrcamentoId(null)
+    setScreen('orcamentos')
+    setNavActive('orcamento')
+  }
+
+  const openOrcamentoNew = () => {
+    setEditingOrcamentoId(null)
+    setScreen('orcamento-form')
+    setNavActive('orcamento')
+  }
+
+  const openOrcamentoById = (id) => {
+    setEditingOrcamentoId(id)
+    setScreen('orcamento-form')
+    setNavActive('orcamento')
+  }
+
+  const goAgendamentosList = () => {
+    setSelectedAgendamentoId(null)
+    setVehicleContext(null)
+    setScreen('agendamentos')
+    setNavActive('checklist')
+  }
+
+  const openAgendamentoDetail = (id) => {
+    setSelectedAgendamentoId(id)
+    setScreen('agendamento-detail')
+    setNavActive('checklist')
+  }
+
+  const openChecklistForAgendamento = (id) => {
+    const ag = getAgendamentoById(id)
+    if (!ag) {
+      addToast({ kind: 'error', msg: 'Atendimento não encontrado' })
+      goAgendamentosList()
+      return
+    }
+    setSelectedAgendamentoId(id)
+    setVehicleContext(agendamentoToVehicleContext(ag))
+    setScreen('checklist')
+    setNavActive('checklist')
+  }
+
   const onOpen = (target, ctx) => {
     if (target === 'orcamento-new') {
-      setScreen('orcamento')
-      setNavActive('orcamento')
-    } else if (target === 'checklist') {
-      if (ctx) setVehicleContext(ctx)
-      setScreen('checklist')
-      setNavActive('checklist')
+      openOrcamentoNew()
+    } else if (target === 'orcamentos') {
+      goOrcamentosList()
+    } else if (target === 'agendamentos' || target === 'checklist') {
+      if (ctx?.assignmentId) {
+        openAgendamentoDetail(ctx.assignmentId)
+      } else if (ctx?.plate) {
+        const found = findByPlate(ctx.plate)
+        if (found) openAgendamentoDetail(found.id)
+        else goAgendamentosList()
+      } else {
+        goAgendamentosList()
+      }
     } else if (target === 'menu') setMenuOpen(true)
     else if (target === 'notifications') setNotifOpen(true)
   }
@@ -72,69 +137,102 @@ export default function App() {
   const onNav = (id) => {
     setNavActive(id)
     if (id === 'dashboard') setScreen('dashboard')
-    if (id === 'orcamento') setScreen('orcamento')
-    if (id === 'checklist') setScreen('checklist')
+    if (id === 'orcamento') goOrcamentosList()
+    if (id === 'checklist') goAgendamentosList()
     if (id === 'clientes') setScreen('clientes')
   }
 
   const goDashboard = () => {
     setScreen('dashboard')
     setNavActive('dashboard')
+    setEditingOrcamentoId(null)
+    setSelectedAgendamentoId(null)
+    setVehicleContext(null)
   }
+
+  const handleSaveDraft = (record) => {
+    saveDraft(record)
+    goOrcamentosList()
+  }
+
+  const handleSubmitForApproval = (record) => {
+    submitForApproval(record)
+    goOrcamentosList()
+  }
+
+  const editingBudget = editingOrcamentoId ? getById(editingOrcamentoId) : null
+  const selectedAgendamento = selectedAgendamentoId ? getAgendamentoById(selectedAgendamentoId) : null
 
   const renderScreen = () => {
     switch (screen) {
       case 'login':
-        return (
-          <LoginScreen
-            onLogin={onLogin}
-            theme={tweaks.theme}
-            onToggleTheme={toggleTheme}
-          />
-        )
+        return <LoginScreen onLogin={onLogin} />
       case 'dashboard':
         return (
           <Dashboard
             user={user}
             onOpen={onOpen}
-            theme={tweaks.theme}
-            onToggleTheme={toggleTheme}
             onLogout={() => {
               setUser(null)
               setScreen('login')
             }}
           />
         )
-      case 'orcamento':
+      case 'orcamentos':
+        return (
+          <OrcamentosListScreen
+            pendingList={pendingList}
+            approvedList={approvedList}
+            onMenu={() => setMenuOpen(true)}
+            onNew={openOrcamentoNew}
+            onOpen={openOrcamentoById}
+          />
+        )
+      case 'orcamento-form':
         return (
           <OrcamentoScreen
-            onBack={goDashboard}
-            onSaved={goDashboard}
+            budget={editingBudget}
+            onBack={goOrcamentosList}
+            onSaveDraft={handleSaveDraft}
+            onSubmitForApproval={handleSubmitForApproval}
             addToast={addToast}
             online={online}
-            theme={tweaks.theme}
-            onToggleTheme={toggleTheme}
+          />
+        )
+      case 'agendamentos':
+        return (
+          <AgendamentosListScreen
+            todayList={todayList}
+            upcomingList={upcomingList}
+            onMenu={() => setMenuOpen(true)}
+            onSelect={openAgendamentoDetail}
+          />
+        )
+      case 'agendamento-detail':
+        return (
+          <AgendamentoDetailScreen
+            agendamento={selectedAgendamento}
+            onBack={goAgendamentosList}
+            onOpenChecklist={openChecklistForAgendamento}
           />
         )
       case 'checklist':
         return (
           <ChecklistScreen
-            onBack={goDashboard}
+            onBack={() => {
+              if (selectedAgendamentoId) {
+                setScreen('agendamento-detail')
+              } else {
+                goAgendamentosList()
+              }
+            }}
             addToast={addToast}
             online={online}
             vehicleContext={vehicleContext}
-            theme={tweaks.theme}
-            onToggleTheme={toggleTheme}
           />
         )
       case 'clientes':
-        return (
-          <ClientesPlaceholder
-            onBack={goDashboard}
-            theme={tweaks.theme}
-            onToggleTheme={toggleTheme}
-          />
-        )
+        return <ClientesPlaceholder onBack={goDashboard} />
       default:
         return null
     }
@@ -170,18 +268,26 @@ export default function App() {
             },
             {
               icon: 'Wallet',
+              label: 'Orçamentos',
+              action: () => {
+                setMenuOpen(false)
+                goOrcamentosList()
+              },
+            },
+            {
+              icon: 'Plus',
               label: 'Novo orçamento',
               action: () => {
                 setMenuOpen(false)
-                onOpen('orcamento-new')
+                openOrcamentoNew()
               },
             },
             {
               icon: 'ClipboardList',
-              label: 'Checklist do veículo',
+              label: 'Tarefas e agendamentos',
               action: () => {
                 setMenuOpen(false)
-                onOpen('checklist')
+                goAgendamentosList()
               },
             },
             {
@@ -191,14 +297,6 @@ export default function App() {
                 setMenuOpen(false)
                 setScreen('clientes')
                 setNavActive('clientes')
-              },
-            },
-            {
-              icon: tweaks.theme === 'dark' ? 'Sun' : 'Moon',
-              label: tweaks.theme === 'dark' ? 'Modo claro' : 'Modo escuro',
-              action: () => {
-                setMenuOpen(false)
-                toggleTheme()
               },
             },
             { icon: 'HelpCircle', label: 'Ajuda' },
@@ -270,14 +368,14 @@ export default function App() {
               chip: 'warn',
             },
             {
-              t: 'Orçamento enviado',
-              b: 'Marina Costa visualizou seu orçamento de R$ 2.330',
-              chip: 'ok',
+              t: 'Orçamento aguardando aprovação',
+              b: 'Mercedes-AMG GT · Eduardo Almeida — enviado ao admin',
+              chip: 'gold',
             },
             {
               t: 'Sincronização concluída',
               b: '3 checklists sincronizados com o servidor',
-              chip: 'gold',
+              chip: 'ok',
             },
           ].map((n, i) => (
             <div
@@ -329,17 +427,6 @@ export default function App() {
             ]}
           />
         </TweakSection>
-        <TweakSection label="Modo de cor">
-          <TweakRadio
-            label="Tema"
-            value={tweaks.theme}
-            onChange={(v) => setTweak('theme', v)}
-            options={[
-              { label: 'Escuro', value: 'dark' },
-              { label: 'Claro', value: 'light' },
-            ]}
-          />
-        </TweakSection>
         <TweakSection label="Conectividade">
           <TweakToggle label="Online (demo)" value={online} onChange={setOnline} />
         </TweakSection>
@@ -359,19 +446,24 @@ export default function App() {
             }}
           />
           <TweakButton
-            label="Orçamento"
+            label="Lista de orçamentos"
             onClick={() => {
               if (!user) setUser({ name: 'Rafael Marques', role: 'Técnico Sênior' })
-              setScreen('orcamento')
-              setNavActive('orcamento')
+              goOrcamentosList()
             }}
           />
           <TweakButton
-            label="Checklist"
+            label="Novo orçamento"
             onClick={() => {
               if (!user) setUser({ name: 'Rafael Marques', role: 'Técnico Sênior' })
-              setScreen('checklist')
-              setNavActive('checklist')
+              openOrcamentoNew()
+            }}
+          />
+          <TweakButton
+            label="Tarefas e agendamentos"
+            onClick={() => {
+              if (!user) setUser({ name: 'Rafael Marques', role: 'Técnico Sênior' })
+              goAgendamentosList()
             }}
           />
         </TweakSection>
@@ -380,14 +472,10 @@ export default function App() {
   )
 }
 
-function ClientesPlaceholder({ onBack, theme, onToggleTheme }) {
+function ClientesPlaceholder({ onBack }) {
   return (
     <>
-      <TopBar
-        title="Meus clientes"
-        onBack={onBack}
-        right={<ThemeToggle theme={theme} onToggle={onToggleTheme} />}
-      />
+      <TopBar title="Meus clientes" onBack={onBack} />
       <div className="screen">
         <div className="screen-section">
           <div className="eyebrow">Em breve</div>
