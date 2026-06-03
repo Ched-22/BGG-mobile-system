@@ -13,6 +13,7 @@ import {
   SectionHeader,
 } from '../components/ui/index.jsx'
 import { isValidEmail } from '../utils/format.js'
+import api from '../lib/api.js'
 
 export function LoginScreen({ onLogin }) {
   const [email, setEmail] = useState('');
@@ -33,16 +34,22 @@ export function LoginScreen({ onLogin }) {
     return e;
   };
 
-  const submit = (preset) => {
+  const submit = async () => {
     const e = validate();
     setErrors(e);
     setTouched({ email: true, pass: true });
     if (Object.keys(e).length > 0) return;
     setLoading(true);
-    setTimeout(() => {
+    try {
+      const { data } = await api.post('/auth/login', { email, password: pass });
+      localStorage.setItem('bgg-mobile-token', data.access_token);
+      localStorage.setItem('bgg-mobile-user', JSON.stringify(data.user));
+      onLogin(data.user);
+    } catch {
+      setErrors({ pass: "E-mail ou senha incorretos." });
+    } finally {
       setLoading(false);
-      onLogin({ name: "Rafael Marques", role: "Técnico Sênior" });
-    }, 700);
+    }
   };
 
   const quickFill = () => {

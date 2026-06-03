@@ -55,11 +55,12 @@ export function OrcamentoScreen({
   onSubmitForApproval,
   addToast,
   online,
+  onBudgetPersisted,
 }) {
   const readOnly = budget ? !isOrcamentoEditable(budget.status) : false
   const isEdit = !!budget?.id
 
-  const [budgetId] = useState(() => budget?.id || `orc-${Date.now()}`)
+  const [budgetId, setBudgetId] = useState(() => budget?.id || `orc-local-${Date.now()}`)
   const [client, setClient] = useState(() => emptyClient(budget?.client || presetClient))
   const [vehicle, setVehicle] = useState(() => emptyVehicle(budget?.vehicle || presetVehicle))
   const [vehicleSize, setVehicleSize] = useState(budget?.vehicleSize || presetVehicle?.size || 'medio')
@@ -142,18 +143,26 @@ export function OrcamentoScreen({
     total: computeBudgetTotal(formPayload),
   })
 
-  const save = () => {
+  const save = async () => {
     if (readOnly) return
     setTouched({ name: true, phone: true, email: true, plate: true, services: true, total: true })
     if (Object.keys(errors).length > 0) {
       addToast({ kind: 'error', msg: 'Verifique os campos destacados' })
       return
     }
-    onSaveDraft?.(buildRecord())
-    addToast({
-      kind: 'ok',
-      msg: online ? 'Orçamento salvo' : 'Salvo offline — sincronizará ao reconectar',
-    })
+    try {
+      const saved = await onSaveDraft?.(buildRecord())
+      if (saved?.id) {
+        setBudgetId(saved.id)
+        onBudgetPersisted?.(saved)
+      }
+      addToast({
+        kind: 'ok',
+        msg: online ? 'Orçamento salvo' : 'Salvo offline — sincronizará ao reconectar',
+      })
+    } catch {
+      addToast({ kind: 'error', msg: 'Não foi possível salvar na API. Verifique a ligação.' })
+    }
   }
 
   const requestApproval = () => {
@@ -166,10 +175,18 @@ export function OrcamentoScreen({
     setConfirmApproval(true)
   }
 
-  const confirmSubmitApproval = () => {
+  const confirmSubmitApproval = async () => {
     setConfirmApproval(false)
-    onSubmitForApproval?.(buildRecord())
-    addToast({ kind: 'ok', msg: 'Orçamento enviado ao administrador para aprovação' })
+    try {
+      const saved = await onSubmitForApproval?.(buildRecord())
+      if (saved?.id) {
+        setBudgetId(saved.id)
+        onBudgetPersisted?.(saved)
+      }
+      addToast({ kind: 'ok', msg: 'Orçamento enviado ao administrador para aprovação' })
+    } catch {
+      addToast({ kind: 'error', msg: 'Não foi possível enviar para aprovação.' })
+    }
   }
 
   const inputDisabled = readOnly

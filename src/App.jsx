@@ -22,33 +22,22 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   editorial: 'medium',
 }/*EDITMODE-END*/
 
+function restoreUser() {
+  try {
+    const token = localStorage.getItem('bgg-mobile-token')
+    const raw = localStorage.getItem('bgg-mobile-user')
+    if (token && raw) return JSON.parse(raw)
+  } catch {
+    /* ignore */
+  }
+  return null
+}
+
+/** Raiz: hooks estáveis (sem dados da API). Evita violação de ordem no HMR/login. */
 export default function App() {
-  const [screen, setScreen] = useState('login')
-  const [user, setUser] = useState(null)
-  const [vehicleContext, setVehicleContext] = useState(null)
-  const [selectedAgendamentoId, setSelectedAgendamentoId] = useState(null)
-  const [editingOrcamentoId, setEditingOrcamentoId] = useState(null)
+  const [user, setUser] = useState(restoreUser)
   const [toasts, setToasts] = useState([])
-  const [navActive, setNavActive] = useState('dashboard')
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [notifOpen, setNotifOpen] = useState(false)
-  const [online, setOnline] = useState(true)
   const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS)
-
-  const {
-    pendingList,
-    approvedList,
-    getById,
-    saveDraft,
-    submitForApproval,
-  } = useOrcamentos()
-
-  const {
-    todayList,
-    upcomingList,
-    getById: getAgendamentoById,
-    findByPlate,
-  } = useAgendamentos()
 
   useEffect(() => {
     const root = document.documentElement
@@ -66,10 +55,88 @@ export default function App() {
 
   const onLogin = (u) => {
     setUser(u)
-    setScreen('dashboard')
-    setNavActive('dashboard')
     addToast({ kind: 'ok', msg: `Bem-vindo, ${u.name.split(' ')[0]}` })
   }
+
+  const onLogout = () => {
+    localStorage.removeItem('bgg-mobile-token')
+    localStorage.removeItem('bgg-mobile-user')
+    setUser(null)
+  }
+
+  if (!user) {
+    return (
+      <>
+        <LoginScreen onLogin={onLogin} />
+        <Toast toasts={toasts} />
+        <TweaksPanel title="Tweaks">
+          <TweakSection label="Densidade">
+            <TweakRadio
+              label="Espaço"
+              value={tweaks.density}
+              onChange={(v) => setTweak('density', v)}
+              options={[
+                { label: 'Compacto', value: 'compact' },
+                { label: 'Normal', value: 'comfortable' },
+                { label: 'Amplo', value: 'spacious' },
+              ]}
+            />
+          </TweakSection>
+          <TweakSection label="Tipografia">
+            <TweakRadio
+              label="Estilo"
+              value={tweaks.editorial}
+              onChange={(v) => setTweak('editorial', v)}
+              options={[
+                { label: 'Utilitária', value: 'low' },
+                { label: 'Híbrida', value: 'medium' },
+                { label: 'Editorial', value: 'high' },
+              ]}
+            />
+          </TweakSection>
+        </TweaksPanel>
+      </>
+    )
+  }
+
+  return (
+    <AuthenticatedApp
+      user={user}
+      onLogout={onLogout}
+      tweaks={tweaks}
+      setTweak={setTweak}
+      toasts={toasts}
+      addToast={addToast}
+    />
+  )
+}
+
+/** Área logada: hooks de orçamentos/agendamentos ficam só aqui. */
+function AuthenticatedApp({ user, onLogout, tweaks, setTweak, toasts, addToast }) {
+  const [screen, setScreen] = useState('dashboard')
+  const [vehicleContext, setVehicleContext] = useState(null)
+  const [selectedAgendamentoId, setSelectedAgendamentoId] = useState(null)
+  const [editingOrcamentoId, setEditingOrcamentoId] = useState(null)
+  const [navActive, setNavActive] = useState('dashboard')
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [notifOpen, setNotifOpen] = useState(false)
+  const [online, setOnline] = useState(true)
+
+  const {
+    pendingList,
+    approvedList,
+    getById,
+    saveDraft,
+    submitForApproval,
+    orcamentosError,
+  } = useOrcamentos()
+
+  const {
+    todayList,
+    upcomingList,
+    getById: getAgendamentoById,
+    findByPlate,
+  } = useAgendamentos()
 
   const goOrcamentosList = () => {
     setEditingOrcamentoId(null)
@@ -150,14 +217,21 @@ export default function App() {
     setVehicleContext(null)
   }
 
-  const handleSaveDraft = (record) => {
-    saveDraft(record)
+  const handleSaveDraft = async (record) => {
+    const saved = await saveDraft(record)
+    if (saved?.id) setEditingOrcamentoId(saved.id)
     goOrcamentosList()
+    return saved
   }
 
-  const handleSubmitForApproval = (record) => {
-    submitForApproval(record)
+  const handleSubmitForApproval = async (record) => {
+    const saved = await submitForApproval(record)
     goOrcamentosList()
+    return saved
+  }
+
+  const handleLogout = () => {
+    onLogout()
   }
 
   const editingBudget = editingOrcamentoId ? getById(editingOrcamentoId) : null
@@ -165,17 +239,12 @@ export default function App() {
 
   const renderScreen = () => {
     switch (screen) {
-      case 'login':
-        return <LoginScreen onLogin={onLogin} />
       case 'dashboard':
         return (
           <Dashboard
             user={user}
             onOpen={onOpen}
-            onLogout={() => {
-              setUser(null)
-              setScreen('login')
-            }}
+            onLogout={handleLogout}
           />
         )
       case 'orcamentos':
@@ -183,6 +252,7 @@ export default function App() {
           <OrcamentosListScreen
             pendingList={pendingList}
             approvedList={approvedList}
+            apiError={orcamentosError}
             onMenu={() => setMenuOpen(true)}
             onNew={openOrcamentoNew}
             onOpen={openOrcamentoById}
@@ -195,6 +265,7 @@ export default function App() {
             onBack={goOrcamentosList}
             onSaveDraft={handleSaveDraft}
             onSubmitForApproval={handleSubmitForApproval}
+            onBudgetPersisted={(saved) => setEditingOrcamentoId(saved.id)}
             addToast={addToast}
             online={online}
           />
@@ -234,23 +305,27 @@ export default function App() {
       case 'clientes':
         return <ClientesPlaceholder onBack={goDashboard} />
       default:
-        return null
+        return (
+          <Dashboard
+            user={user}
+            onOpen={onOpen}
+            onLogout={handleLogout}
+          />
+        )
     }
   }
-
-  const isLogin = screen === 'login'
 
   return (
     <>
       <div className="phone-shell">
-        {!online && !isLogin && (
+        {!online && (
           <div className="banner" style={{ position: 'sticky', top: 0, zIndex: 40 }}>
             <span className="dot" />
             <span>Você está offline. Os dados serão salvos no dispositivo.</span>
           </div>
         )}
         {renderScreen()}
-        {!isLogin && <BottomNav active={navActive} onNav={onNav} />}
+        <BottomNav active={navActive} onNav={onNav} />
       </div>
 
       <Toast toasts={toasts} />
@@ -328,8 +403,7 @@ export default function App() {
           <button
             onClick={() => {
               setMenuOpen(false)
-              setUser(null)
-              setScreen('login')
+              handleLogout()
             }}
             style={{
               display: 'flex',
@@ -431,41 +505,11 @@ export default function App() {
           <TweakToggle label="Online (demo)" value={online} onChange={setOnline} />
         </TweakSection>
         <TweakSection label="Atalhos de navegação">
-          <TweakButton
-            label="Tela de login"
-            onClick={() => {
-              setUser(null)
-              setScreen('login')
-            }}
-          />
-          <TweakButton
-            label="Dashboard"
-            onClick={() => {
-              if (!user) setUser({ name: 'Rafael Marques', role: 'Técnico Sênior' })
-              goDashboard()
-            }}
-          />
-          <TweakButton
-            label="Lista de orçamentos"
-            onClick={() => {
-              if (!user) setUser({ name: 'Rafael Marques', role: 'Técnico Sênior' })
-              goOrcamentosList()
-            }}
-          />
-          <TweakButton
-            label="Novo orçamento"
-            onClick={() => {
-              if (!user) setUser({ name: 'Rafael Marques', role: 'Técnico Sênior' })
-              openOrcamentoNew()
-            }}
-          />
-          <TweakButton
-            label="Tarefas e agendamentos"
-            onClick={() => {
-              if (!user) setUser({ name: 'Rafael Marques', role: 'Técnico Sênior' })
-              goAgendamentosList()
-            }}
-          />
+          <TweakButton label="Dashboard" onClick={goDashboard} />
+          <TweakButton label="Lista de orçamentos" onClick={goOrcamentosList} />
+          <TweakButton label="Novo orçamento" onClick={openOrcamentoNew} />
+          <TweakButton label="Tarefas e agendamentos" onClick={goAgendamentosList} />
+          <TweakButton label="Checklist" onClick={() => { setScreen('checklist'); setNavActive('checklist') }} />
         </TweakSection>
       </TweaksPanel>
     </>

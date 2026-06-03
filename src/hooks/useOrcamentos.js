@@ -1,84 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
-import { computeBudgetTotal } from '../data/orcamentoCatalog.js'
-
-const STORAGE_KEY = 'bgg-orcamentos-v1'
+import api from '../lib/api'
+import { isLocalQuoteId, mapQuoteFromApi, mapQuoteToApi } from '../lib/quoteApi.js'
 
 export const ORCAMENTO_STATUS = {
-  DRAFT: 'draft',
-  PENDING: 'pending_approval',
-  APPROVED: 'approved',
-}
-
-function seedOrcamentos() {
-  const now = Date.now()
-  return [
-    {
-      id: 'orc-demo-1',
-      status: ORCAMENTO_STATUS.APPROVED,
-      createdAt: new Date(now - 86400000 * 3).toISOString(),
-      updatedAt: new Date(now - 86400000 * 2).toISOString(),
-      approvedAt: new Date(now - 86400000 * 2).toISOString(),
-      client: { name: 'Marina Costa', phone: '(11) 99876-5432', email: 'marina@email.com' },
-      vehicle: { plate: 'RGM-2H47', brand: 'Porsche', model: '911 Carrera S', year: '2022', color: 'Preto', km: '18400' },
-      vehicleSize: 'medio',
-      selected: { polim: true, vitri: true },
-      discount: '0',
-      override: '',
-      desc: '',
-      internal: '',
-      total: 2330,
-    },
-    {
-      id: 'orc-demo-2',
-      status: ORCAMENTO_STATUS.PENDING,
-      createdAt: new Date(now - 86400000).toISOString(),
-      updatedAt: new Date(now - 3600000).toISOString(),
-      submittedAt: new Date(now - 3600000).toISOString(),
-      client: { name: 'Eduardo Almeida', phone: '(11) 98765-1234', email: '' },
-      vehicle: { plate: 'HBL-9C12', brand: 'Mercedes-Benz', model: 'AMG GT', year: '2021', color: 'Cinza', km: '22000' },
-      vehicleSize: 'medio',
-      selected: { ppf: true, couro: true },
-      discount: '200',
-      override: '',
-      desc: 'Cliente aguarda retorno até sexta.',
-      internal: '',
-      total: 4380,
-    },
-    {
-      id: 'orc-demo-3',
-      status: ORCAMENTO_STATUS.DRAFT,
-      createdAt: new Date(now - 7200000).toISOString(),
-      updatedAt: new Date(now - 1800000).toISOString(),
-      client: { name: 'Beatriz Lima', phone: '(11) 97654-3210', email: 'beatriz@email.com' },
-      vehicle: { plate: 'ABC-1D23', brand: 'Range Rover', model: 'Velar', year: '2023', color: 'Branco', km: '9500' },
-      vehicleSize: 'grande',
-      selected: { motor: true, ozonio: true },
-      discount: '0',
-      override: '',
-      desc: '',
-      internal: 'Preferência por horário da manhã.',
-      total: 630,
-    },
-  ]
-}
-
-function loadFromStorage() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) {
-      const parsed = JSON.parse(raw)
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed
-    }
-  } catch {
-    /* ignore */
-  }
-  const seed = seedOrcamentos()
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(seed))
-  return seed
-}
-
-function persist(list) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(list))
+  DRAFT: 'DRAFT',
+  PENDING: 'PENDING',
+  APPROVED: 'APPROVED',
 }
 
 export function isOrcamentoEditable(status) {
@@ -98,52 +25,72 @@ export function orcamentoStatusChip(status) {
 }
 
 export function useOrcamentos() {
-  const [orcamentos, setOrcamentos] = useState(loadFromStorage)
+  const [orcamentos, setOrcamentos] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
-  useEffect(() => {
-    persist(orcamentos)
-  }, [orcamentos])
-
-  const upsert = useCallback((payload) => {
-    const now = new Date().toISOString()
-    const total = computeBudgetTotal(payload)
-    const record = { ...payload, total, updatedAt: now }
-
-    setOrcamentos((prev) => {
-      const idx = prev.findIndex((o) => o.id === record.id)
-      if (idx >= 0) {
-        const next = [...prev]
-        next[idx] = { ...prev[idx], ...record }
-        return next
-      }
-      return [{ ...record, createdAt: now }, ...prev]
-    })
-    return record
+  const fetchOrcamentos = useCallback(async () => {
+    setError(null)
+    try {
+      const { data } = await api.get('/quotes')
+      const list = Array.isArray(data) ? data.map(mapQuoteFromApi).filter(Boolean) : []
+      setOrcamentos(list)
+    } catch (err) {
+      setError(err.response?.status === 404
+        ? 'Rota /quotes não encontrada. Reinicie a API (bgggarage-api) com npm run start:dev.'
+        : 'Não foi possível carregar os orçamentos.')
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
-  const createDraft = useCallback((payload) => {
-    const id = payload.id || `orc-${Date.now()}`
-    return upsert({
-      ...payload,
-      id,
-      status: ORCAMENTO_STATUS.DRAFT,
-    })
-  }, [upsert])
+  useEffect(() => {
+    const token = localStorage.getItem('bgg-mobile-token')
+    if (!token) {
+      setLoading(false)
+      return
+    }
+    fetchOrcamentos()
+  }, [fetchOrcamentos])
 
-  const saveDraft = useCallback((payload) => {
-    return upsert({
-      ...payload,
-      status: ORCAMENTO_STATUS.DRAFT,
-    })
-  }, [upsert])
+  const upsert = useCallback(async (payload) => {
+    const body = mapQuoteToApi({ ...payload, status: ORCAMENTO_STATUS.DRAFT })
+    try {
+      if (payload.id && !isLocalQuoteId(payload.id)) {
+        const { data } = await api.patch(`/quotes/${payload.id}`, body)
+        const mapped = mapQuoteFromApi(data)
+        setOrcamentos((prev) => prev.map((o) => (o.id === mapped.id ? mapped : o)))
+        return mapped
+      }
+      const { data } = await api.post('/quotes', body)
+      const mapped = mapQuoteFromApi(data)
+      setOrcamentos((prev) => [mapped, ...prev])
+      return mapped
+    } catch (err) {
+      setError(err.response?.data?.message || 'Erro ao guardar orçamento')
+      throw err
+    }
+  }, [])
 
-  const submitForApproval = useCallback((payload) => {
-    const now = new Date().toISOString()
-    return upsert({
-      ...payload,
-      status: ORCAMENTO_STATUS.PENDING,
-      submittedAt: now,
-    })
+  const saveDraft = useCallback((payload) => upsert(payload), [upsert])
+
+  const submitForApproval = useCallback(async (payload) => {
+    try {
+      let id = payload.id
+      if (!id || isLocalQuoteId(id)) {
+        const created = await upsert(payload)
+        id = created.id
+      } else {
+        await api.patch(`/quotes/${id}`, mapQuoteToApi(payload))
+      }
+      const { data } = await api.patch(`/quotes/${id}/submit`)
+      const mapped = mapQuoteFromApi(data)
+      setOrcamentos((prev) => prev.map((o) => (o.id === mapped.id ? mapped : o)))
+      return mapped
+    } catch (err) {
+      setError(err.response?.data?.message || 'Erro ao enviar para aprovação')
+      throw err
+    }
   }, [upsert])
 
   const getById = useCallback(
@@ -156,6 +103,7 @@ export function useOrcamentos() {
   const pendingList = orcamentos
     .filter((o) => o.status === ORCAMENTO_STATUS.DRAFT || o.status === ORCAMENTO_STATUS.PENDING)
     .sort(byUpdated)
+
   const approvedList = orcamentos
     .filter((o) => o.status === ORCAMENTO_STATUS.APPROVED)
     .sort(byUpdated)
@@ -164,9 +112,11 @@ export function useOrcamentos() {
     orcamentos,
     pendingList,
     approvedList,
+    loading,
+    error,
     getById,
-    createDraft,
     saveDraft,
     submitForApproval,
+    refresh: fetchOrcamentos,
   }
 }

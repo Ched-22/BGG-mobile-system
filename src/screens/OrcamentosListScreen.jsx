@@ -69,11 +69,17 @@ function EmptyBlock({ children }) {
   )
 }
 
-export function OrcamentosListScreen({ pendingList, approvedList, onMenu, onNew, onOpen }) {
+export function OrcamentosListScreen({ pendingList, approvedList, apiError, onMenu, onNew, onOpen }) {
   return (
     <>
       <TopBar title="Orçamentos" onMenu={onMenu} />
       <div className="screen">
+        {apiError && (
+          <div className="banner" style={{ marginBottom: 12 }}>
+            <Icon name="AlertTriangle" size={14} style={{ color: 'var(--t-status-warn-fg)' }} />
+            <span>{typeof apiError === 'string' ? apiError : 'Erro ao ligar à API.'}</span>
+          </div>
+        )}
         <div className="screen-section">
           <Button block onClick={onNew} icon="Plus">
             Novo orçamento

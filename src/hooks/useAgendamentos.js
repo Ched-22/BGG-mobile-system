@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-
-const STORAGE_KEY = 'bgg-agendamentos-v1'
+import api from '../lib/api'
 
 export const AGENDAMENTO_KIND = {
   TAREFA: 'tarefa',
@@ -15,93 +14,28 @@ export const CHECKLIST_PROGRESS = {
   DONE: 'concluido',
 }
 
-function seedAgendamentos() {
-  const now = new Date()
-  const today9 = new Date(now)
-  today9.setHours(9, 0, 0, 0)
-  const today14 = new Date(now)
-  today14.setHours(14, 30, 0, 0)
-  const tomorrow10 = new Date(now)
-  tomorrow10.setDate(tomorrow10.getDate() + 1)
-  tomorrow10.setHours(10, 0, 0, 0)
-
-  return [
-    {
-      id: 'ag-1',
-      kind: AGENDAMENTO_KIND.AGENDAMENTO,
-      title: 'Vitrificação cerâmica completa',
-      services: ['Vitrificação cerâmica', 'Polimento técnico'],
-      scheduledAt: today9.toISOString(),
-      client: 'Marina Costa',
-      plate: 'RGM-2H47',
-      car: 'Porsche 911 Carrera S',
-      year: '2022',
-      color: 'Preto Jet',
-      adminNote: 'Prioridade — cliente VIP. Confirmar horário na chegada.',
-      checklistProgress: CHECKLIST_PROGRESS.ENTRADA_DONE,
-    },
-    {
-      id: 'ag-2',
-      kind: AGENDAMENTO_KIND.AGENDAMENTO,
-      title: 'PPF frontal + higienização',
-      services: ['PPF — película de proteção', 'Higienização de couro'],
-      scheduledAt: today14.toISOString(),
-      client: 'Eduardo Almeida',
-      plate: 'HBL-9C12',
-      car: 'Mercedes-AMG GT',
-      year: '2021',
-      color: 'Cinza selenite',
-      adminNote: 'Veículo chega com acompanhante. Aguardar checklist de entrada.',
-      checklistProgress: CHECKLIST_PROGRESS.NONE,
-    },
-    {
-      id: 'ag-3',
-      kind: AGENDAMENTO_KIND.TAREFA,
-      title: 'Checklist de saída pendente',
-      services: ['Entrega pós-serviço'],
-      scheduledAt: today14.toISOString(),
-      client: 'Beatriz Lima',
-      plate: 'ABC-1D23',
-      car: 'Range Rover Velar',
-      year: '2023',
-      color: 'Branco Fuji',
-      adminNote: 'Tarefa criada pelo admin — finalizar inspeção de saída hoje.',
-      checklistProgress: CHECKLIST_PROGRESS.SAIDA,
-    },
-    {
-      id: 'ag-4',
-      kind: AGENDAMENTO_KIND.AGENDAMENTO,
-      title: 'Detalhamento completo',
-      services: ['Detalhamento de motor', 'Tratamento de ozônio'],
-      scheduledAt: tomorrow10.toISOString(),
-      client: 'Carlos Mendes',
-      plate: 'FGH-4K88',
-      car: 'Audi RS6 Avant',
-      year: '2020',
-      color: 'Azul Navarra',
-      adminNote: '',
-      checklistProgress: CHECKLIST_PROGRESS.NONE,
-    },
-  ]
-}
-
-function loadFromStorage() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) {
-      const parsed = JSON.parse(raw)
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed
-    }
-  } catch {
-    /* ignore */
+// Mapeia status da API para o formato do mobile
+function mapAppointmentToAgendamento(a) {
+  return {
+    id: a.id,
+    kind: AGENDAMENTO_KIND.AGENDAMENTO,
+    title: a.notes || 'Agendamento',
+    services: [],
+    scheduledAt: a.scheduledAt,
+    client: a.vehicle?.client?.name || '',
+    plate: a.vehicle?.plate || '',
+    car: `${a.vehicle?.brand} ${a.vehicle?.model}` || '',
+    year: String(a.vehicle?.year || ''),
+    color: a.vehicle?.color || '',
+    adminNote: a.notes || '',
+    checklistProgress: mapStatus(a.status),
   }
-  const seed = seedAgendamentos()
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(seed))
-  return seed
 }
 
-function persist(list) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(list))
+function mapStatus(status) {
+  if (status === 'COMPLETED') return CHECKLIST_PROGRESS.DONE
+  if (status === 'IN_PROGRESS') return CHECKLIST_PROGRESS.ENTRADA
+  return CHECKLIST_PROGRESS.NONE
 }
 
 export function agendamentoKindLabel(kind) {
@@ -144,11 +78,8 @@ export function formatAgendamentoWhen(iso) {
   if (isToday) return `Hoje · ${time}`
   if (isTomorrow) return `Amanhã · ${time}`
   return d.toLocaleDateString('pt-BR', {
-    weekday: 'short',
-    day: '2-digit',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
+    weekday: 'short', day: '2-digit', month: 'short',
+    hour: '2-digit', minute: '2-digit',
   })
 }
 
@@ -167,11 +98,29 @@ export function agendamentoToVehicleContext(ag) {
 }
 
 export function useAgendamentos() {
-  const [agendamentos, setAgendamentos] = useState(loadFromStorage)
+  const [agendamentos, setAgendamentos] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  const fetchAgendamentos = useCallback(async () => {
+    try {
+      const { data } = await api.get('/appointments')
+      const list = Array.isArray(data) ? data : []
+      setAgendamentos(list.map(mapAppointmentToAgendamento))
+    } catch {
+      // fallback offline mantém estado actual
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
   useEffect(() => {
-    persist(agendamentos)
-  }, [agendamentos])
+    const token = localStorage.getItem('bgg-mobile-token')
+    if (!token) {
+      setLoading(false)
+      return
+    }
+    fetchAgendamentos()
+  }, [fetchAgendamentos])
 
   const getById = useCallback((id) => agendamentos.find((a) => a.id === id), [agendamentos])
 
@@ -183,21 +132,25 @@ export function useAgendamentos() {
     [agendamentos],
   )
 
-  const updateChecklistProgress = useCallback((id, progress) => {
+  const updateChecklistProgress = useCallback(async (id, progress) => {
+    const statusMap = {
+      [CHECKLIST_PROGRESS.DONE]: 'COMPLETED',
+      [CHECKLIST_PROGRESS.ENTRADA]: 'IN_PROGRESS',
+      [CHECKLIST_PROGRESS.NONE]: 'PENDING',
+    }
+    try {
+      await api.patch(`/appointments/${id}`, { status: statusMap[progress] || 'IN_PROGRESS' })
+    } catch { /* offline */ }
     setAgendamentos((prev) =>
       prev.map((a) => (a.id === id ? { ...a, checklistProgress: progress } : a)),
     )
   }, [])
 
+  const now = new Date()
   const todayList = agendamentos
     .filter((a) => {
       const d = new Date(a.scheduledAt)
-      const now = new Date()
-      return (
-        d.getDate() === now.getDate() &&
-        d.getMonth() === now.getMonth() &&
-        d.getFullYear() === now.getFullYear()
-      )
+      return d.getDate() === now.getDate() && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
     })
     .sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt))
 
@@ -209,8 +162,10 @@ export function useAgendamentos() {
     agendamentos,
     todayList,
     upcomingList,
+    loading,
     getById,
     findByPlate,
     updateChecklistProgress,
+    refresh: fetchAgendamentos,
   }
 }
