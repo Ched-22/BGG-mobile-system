@@ -14,11 +14,13 @@ import {
 } from '../components/ui/index.jsx'
 import { isValidEmail } from '../utils/format.js'
 import api from '../lib/api.js'
+import { useAuth } from '../context/AuthContext.jsx'
 
 export function LoginScreen({ onLogin }) {
+  const { login } = useAuth()
   const [email, setEmail] = useState('');
   const [pass, setPass] = useState('');
-  const [remember, setRemember] = useState(true);
+  const [remember, setRemember] = useState(false);
   const [show, setShow] = useState(false);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
@@ -42,8 +44,7 @@ export function LoginScreen({ onLogin }) {
     setLoading(true);
     try {
       const { data } = await api.post('/auth/login', { email, password: pass });
-      localStorage.setItem('bgg-mobile-token', data.access_token);
-      localStorage.setItem('bgg-mobile-user', JSON.stringify(data.user));
+      login(data.access_token, data.user, { remember });
       onLogin(data.user);
     } catch {
       setErrors({ pass: "E-mail ou senha incorretos." });
