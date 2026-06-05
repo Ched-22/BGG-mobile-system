@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import api from '../lib/api'
+import { getToken } from '../lib/auth'
 
 export const AGENDAMENTO_KIND = {
   TAREFA: 'tarefa',
@@ -114,7 +115,7 @@ export function useAgendamentos() {
   }, [])
 
   useEffect(() => {
-    const token = localStorage.getItem('bgg-mobile-token')
+    const token = getToken()
     if (!token) {
       setLoading(false)
       return

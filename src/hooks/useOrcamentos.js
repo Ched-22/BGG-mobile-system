@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import api from '../lib/api'
+import { getToken } from '../lib/auth'
 import { isLocalQuoteId, mapQuoteFromApi, mapQuoteToApi } from '../lib/quoteApi.js'
 
 export const ORCAMENTO_STATUS = {
@@ -45,7 +46,7 @@ export function useOrcamentos() {
   }, [])
 
   useEffect(() => {
-    const token = localStorage.getItem('bgg-mobile-token')
+    const token = getToken()
     if (!token) {
       setLoading(false)
       return

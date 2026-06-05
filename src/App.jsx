@@ -16,26 +16,23 @@ import { ChecklistScreen } from './screens/ChecklistScreen.jsx'
 import { AgendamentosListScreen, AgendamentoDetailScreen } from './screens/AgendamentosScreen.jsx'
 import { useOrcamentos } from './hooks/useOrcamentos.js'
 import { useAgendamentos, agendamentoToVehicleContext } from './hooks/useAgendamentos.js'
+import { useAuth } from './context/AuthContext.jsx'
 
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   density: 'comfortable',
   editorial: 'medium',
 }/*EDITMODE-END*/
 
-function restoreUser() {
-  try {
-    const token = localStorage.getItem('bgg-mobile-token')
-    const raw = localStorage.getItem('bgg-mobile-user')
-    if (token && raw) return JSON.parse(raw)
-  } catch {
-    /* ignore */
-  }
-  return null
-}
-
 /** Raiz: hooks estáveis (sem dados da API). Evita violação de ordem no HMR/login. */
 export default function App() {
-  const [user, setUser] = useState(restoreUser)
+  const {
+    ready,
+    isAuthenticated,
+    user,
+    logout,
+    sessionExpired,
+    clearSessionExpired,
+  } = useAuth()
   const [toasts, setToasts] = useState([])
   const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS)
 
@@ -53,18 +50,22 @@ export default function App() {
     }, 3000)
   }, [])
 
+  useEffect(() => {
+    if (!isAuthenticated && sessionExpired) {
+      addToast({ kind: 'error', msg: 'Sessão expirada. Faça login novamente.' })
+      clearSessionExpired()
+    }
+  }, [isAuthenticated, sessionExpired, clearSessionExpired, addToast])
+
   const onLogin = (u) => {
-    setUser(u)
     addToast({ kind: 'ok', msg: `Bem-vindo, ${u.name.split(' ')[0]}` })
   }
 
-  const onLogout = () => {
-    localStorage.removeItem('bgg-mobile-token')
-    localStorage.removeItem('bgg-mobile-user')
-    setUser(null)
+  if (!ready) {
+    return null
   }
 
-  if (!user) {
+  if (!isAuthenticated || !user) {
     return (
       <>
         <LoginScreen onLogin={onLogin} />
@@ -102,7 +103,7 @@ export default function App() {
   return (
     <AuthenticatedApp
       user={user}
-      onLogout={onLogout}
+      onLogout={logout}
       tweaks={tweaks}
       setTweak={setTweak}
       toasts={toasts}
